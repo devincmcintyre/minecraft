@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Bedrock Server Stats</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #282c34;
+            color: white;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #61dafb;
+        }
+        .stats-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-box {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 10px;
+            width: 250px;
+            box-shadow: 0px 0px 10px rgba(255, 255, 255, 0.1);
+        }
+        .player-list {
+            margin-top: 20px;
+        }
+        .chart-container {
+            margin-top: 30px;
+            width: 80%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Minecraft Bedrock Server Stats</h1>
+
+    <div class="stats-container">
+        <div class="stat-box">
+            <h3>Server Status</h3>
+            <p id="server-status">Loading...</p>
+        </div>
+        <div class="stat-box">
+            <h3>Uptime</h3>
+            <p id="server-uptime">Loading...</p>
+        </div>
+        <div class="stat-box">
+            <h3>CPU Usage</h3>
+            <p id="cpu-usage">Loading...</p>
+        </div>
+        <div class="stat-box">
+            <h3>RAM Usage</h3>
+            <p id="ram-usage">Loading...</p>
+        </div>
+    </div>
+
+    <div class="player-list">
+        <h2>Active Players</h2>
+        <p id="active-players">Loading...</p>
+        <h2>Recent Players</h2>
+        <p id="recent-players">Loading...</p>
+    </div>
+
+    <div class="leaderboard">
+        <h2>Top Players (Most Playtime)</h2>
+        <table id="leaderboardTable">
+            <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Playtime (HH:MM:SS)</th>
+            </tr>
+        </table>
+    </div>
+
+    <div class="chart-container">
+        <h2>Player Activity Over Time</h2>
+        <canvas id="playerChart"></canvas>
+    </div>
+
+    <script>
+        let playerChart;
+        let playerData = {
+            labels: [], // Time labels
+            datasets: [{
+                label: 'Players Online',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        };
+
+        function createChart() {
+            const ctx = document.getElementById('playerChart').getContext('2d');
+            playerChart = new Chart(ctx, {
+                type: 'line',
+                data: playerData,
+                options: {
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Time' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Players Online' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        async function fetchServerStats() {
+            try {
+                const response = await fetch('/api/server-info');
+                const data = await response.json();
+
+                document.getElementById('server-status').innerText = data.status;
+                document.getElementById('server-uptime').innerText = data.uptime_formatted;
+                document.getElementById('cpu-usage').innerText = data.cpu_usage || "Unavailable";
+                document.getElementById('ram-usage').innerText = data.ram_usage || "Unavailable";
+
+                // Active Players (used for the graph)
+                const activePlayers = data.player_activity.active_players.length || 0;  // Ensure it resets to zero
+                document.getElementById('active-players').innerText = activePlayers > 0 ? data.player_activity.active_players.join(", ") : "No players online";
+
+                // Recent Players (only for display, not for graph)
+                const recentPlayers = data.player_activity.recent_players.length > 0
+                    ? data.player_activity.recent_players.join(", ")
+                    : "No recent players";
+                document.getElementById('recent-players').innerText = recentPlayers;
+
+                // Update Player Graph (ONLY TRACK ACTIVE PLAYERS)
+                const currentTime = new Date().toLocaleTimeString();
+
+                if (playerData.labels.length > 20) {  // Keep the last 20 data points
+                    playerData.labels.shift();
+                    playerData.datasets[0].data.shift();
+                }
+
+                playerData.labels.push(currentTime);
+                playerData.datasets[0].data.push(activePlayers);  // <-- This ensures only active players are counted
+
+                playerChart.update();
+
+            } catch (error) {
+                console.error("Error fetching server stats:", error);
+            }
+        }
+
+        async function fetchLeaderboard() {
+            try {
+                console.log("Fetching leaderboard data...");  // Debug log
+
+                const response = await fetch('/api/leaderboard');
+                const data = await response.json();
+
+                console.log("Leaderboard API Response:", data);  // Debug log
+
+                const leaderboardTable = document.getElementById('leaderboardTable'); // Corrected ID
+                leaderboardTable.innerHTML = `
+                    <tr>
+                        <th>Rank</th>
+                        <th>Player</th>
+                        <th>Playtime (HH:MM:SS)</th>
+                    </tr>
+                `;
+
+                if (!data || data.length === 0 || (data.length === 1 && data[0].username === "No players yet")) {
+                    leaderboardTable.innerHTML += `
+                        <tr>
+                            <td colspan="3">No recorded playtime yet.</td>
+                        </tr>
+                    `;
+                    console.warn("Leaderboard API returned no data.");
+                    return;
+                }
+
+                data.forEach((player, index) => {
+                    const hours = Math.floor(player.playtime_seconds / 3600);
+                    const minutes = Math.floor((player.playtime_seconds % 3600) / 60);
+                    const seconds = player.playtime_seconds % 60;
+                    const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+                    leaderboardTable.innerHTML += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${player.username}</td>
+                            <td>${formattedTime}</td>
+                        </tr>
+                    `;
+                });
+
+            } catch (error) {
+                console.error("Error fetching leaderboard:", error);
+            }
+        }
+
+
+    createChart();
+    setInterval(fetchServerStats, 10000);
+    fetchServerStats();
+    setInterval(fetchLeaderboard, 30000);
+    fetchLeaderboard();
+</script>
+<style>
+.leaderboard {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    margin-top: 20px;
+}
+
+#leaderboardTable {
+    border-collapse: collapse;
+    width: 50%;  /* Adjust width as needed */
+    max-width: 600px;  /* Prevents it from stretching too wide */
+    text-align: center;
+    background-color: #1e1e1e;
+    color: white;
+    box-shadow: 0px 0px 10px rgba(255, 255, 255, 0.1);
+}
+
+#leaderboardTable th, #leaderboardTable td {
+    padding: 10px;
+    border: 1px solid white;
+}
+
+#leaderboardTable th {
+    background-color: #333;
+}
+
+</style>
+</body>
+</html>

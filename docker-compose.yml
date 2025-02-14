@@ -1,0 +1,57 @@
+services:
+  bedrock-server:
+    container_name: bedrock-server
+    image: itzg/minecraft-bedrock-server
+    restart: unless-stopped
+    ports:
+      - "19132:19132/udp"
+    environment:
+      WHITE_LIST_USERS: "devdacool,MinedElm9516,TheWhiteBear23,Sarbecue Bause"
+      EULA: "TRUE"
+      SERVER_NAME: "devdacool"
+      GAMEMODE: "survival"
+      DIFFICULTY: "normal"
+      MAX_PLAYERS: 10
+      LEVEL_TYPE: "DEFAULT"
+      ALLOW_CHEATS: "false"
+      WHITE_LIST: "true"
+      VIEW_DISTANCE: 16
+      ONLINE_MODE: "true"
+      LEVEL_NAME: "BedrockWorld"
+      TEXTUREPACK_REQUIRED: "false"
+    volumes:
+      - bedrock-data:/data
+
+  nginx:
+    container_name: minecraft-web
+    image: nginx:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./web:/usr/share/nginx/html
+
+  api:
+    container_name: minecraft-api
+    build: ./api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - minecraft-api-db:/app/data
+      - /srv/minecraft/api/server.py:/app/server.py
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker
+    environment:
+      MAX_PLAYERS: "10"
+      GAMEMODE: "survival"
+      DIFFICULTY: "normal"
+    command: ["python", "/app/server.py"]
+    privileged: true
+
+volumes:
+  bedrock-data:
+    name: bedrock
+  minecraft-api-db:
+    name: minecraft-api-db
