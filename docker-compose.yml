@@ -5,9 +5,12 @@ services:
     restart: unless-stopped
     ports:
       - "19132:19132/udp"
+    expose:
+      - 2222
     environment:
-      WHITE_LIST_USERS: "devdacool,MinedElm9516,TheWhiteBear23,Sarbecue Bause"
+      WHITE_LIST_USERS: "devdacool,MinedElm9516,TheWhiteBear23,Sarbecue Bause,PatchThePirate6"
       EULA: "TRUE"
+      ENABLE_SSH: "TRUE"
       SERVER_NAME: "devdacool"
       GAMEMODE: "survival"
       DIFFICULTY: "normal"
@@ -19,8 +22,21 @@ services:
       ONLINE_MODE: "true"
       LEVEL_NAME: "BedrockWorld"
       TEXTUREPACK_REQUIRED: "false"
+      TZ: "America/Central"
     volumes:
       - bedrock-data:/data
+
+  backup:
+    image: kaiede/minecraft-bedrock-backup
+    restart: always
+    depends_on:
+      - "bedrock-server"
+    environment:
+        TZ: "America/Central"
+    volumes:
+      - /srv/minecraft/backup-config:/config
+      - /srv/minecraft/backups:/backups
+      - bedrock-data:/data 
 
   nginx:
     container_name: minecraft-web

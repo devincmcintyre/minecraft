@@ -1,0 +1,20 @@
+# Whenever the last player logs out, limited to every 3 hours. Plus at 1AM
+schedule:
+  onLastLogout: true
+  minInterval: 3h
+  daily: 01:00
+
+trim:
+  trimDays: 2
+  keepDays: 14
+  minKeep: 2
+
+containers:
+  bedrock:
+    - name: bedrock-server
+      # The hostname here is the name of the service in the compose YML. 
+      ssh: bedrock-server:2222
+      # itzg writes out the password as yaml to the root of /data
+      passwordFile: /data/.remote-console.yaml 
+      worlds:
+        - /data/worlds/BedrockWorld
